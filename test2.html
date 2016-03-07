@@ -1,0 +1,41 @@
+﻿<!DOCTYPE html>
+
+<html lang="en" >
+
+<head>
+    <meta charset="utf-8" />
+    <title></title>
+    <script src="jquery-2.2.1.min.js"></script>
+    <script src="ExcelJs.js"></script>
+
+
+</head>
+<body>
+    <canvas width="600" height="400" id="myCanvas">
+
+    </canvas>
+
+    <script>
+
+        var eObj = new EObject();
+        eObj.frozenRows = 4;
+        eObj.data.set("A2", "A2");
+        eObj.data.set("F5", "F5");
+        eObj.data.set("D10", "D10");
+        eObj.data.set("D11", "D11");
+
+        eObj.combinedCells.add("E9:G10");
+        //eObj.data.set("H20", "H20");
+
+        eObj.rowStyles.set(11, { rowHeight: 45 });
+        eObj.columnStyles.set(4, { columnWidth: 100 });
+
+
+        var oExcel = new ExcelUI("myCanvas",eObj);
+        oExcel.hilightCell({ row: 6, column: 6 });
+  
+
+   
+    </script>
+</body>
+</html>
