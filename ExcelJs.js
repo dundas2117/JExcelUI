@@ -11,6 +11,12 @@ function ExcelUI(canvasId,eObj) {
 
     }
 
+    if (typeof StopIteration == "undefined") {
+        StopIteration = new Error("StopIteration");
+    }
+
+
+
     var c = document.getElementById(canvasId);
     var ctx = c.getContext("2d");
 
@@ -54,7 +60,7 @@ function ExcelUI(canvasId,eObj) {
     var controls = new Set();
 
     var _hilightedCells = new Set();
-
+    var _lastMouseOver = null;
 
     var dragOk = false;
     var dragControl;
@@ -71,6 +77,7 @@ function ExcelUI(canvasId,eObj) {
     bottomBarArea.height = hScrollBarHeight;
     bottomBarArea.left = 1;
     bottomBarArea.width = canvasWidth - vScrollBarWidth;
+    bottomBarArea.scrollWidth = (canvasWidth / 2 - 2 * scrollButtonSize - vScrollBarWidth);
 
     var vScrollBarArea = {};
     vScrollBarArea.top = 1;
@@ -101,7 +108,47 @@ function ExcelUI(canvasId,eObj) {
         drawButton("D", scrollDownButton.getLeft(), scrollDownButton.getTop(), scrollDownButton.getLeft() + scrollDownButton.getWidth(), scrollDownButton.getTop() + scrollDownButton.getHeight(),
             scrollDownButton.getIsHighlighted());
     };
-    scrollDownButton.click =scrollDown;
+    scrollDownButton.click = scrollDown;
+
+
+    var leftScrollButton = new control("LeftScrollButton");
+    leftScrollButton.setLeft(canvasWidth / 2);
+    leftScrollButton.setTop(canvasHeight - scrollButtonSize - 1);
+    leftScrollButton.setWidth(scrollButtonSize);
+    leftScrollButton.setHeight(scrollButtonSize);
+    leftScrollButton.draw = function () {
+        drawButton("L", leftScrollButton.getLeft(), leftScrollButton.getTop(), leftScrollButton.getLeft() + leftScrollButton.getWidth(), leftScrollButton.getTop() + leftScrollButton.getHeight(),
+            leftScrollButton.getIsHighlighted());
+    };
+    leftScrollButton.click = scrollLeft;
+
+    var rightScrollButton = new control("RightScrollButton");
+    rightScrollButton.setLeft(vScrollBarArea.left - vScrollBarWidth );
+    rightScrollButton.setTop(canvasHeight - scrollButtonSize - 1);
+    rightScrollButton.setWidth(scrollButtonSize);
+    rightScrollButton.setHeight(scrollButtonSize);
+    rightScrollButton.draw = function () {
+        drawButton("R", rightScrollButton.getLeft(), rightScrollButton.getTop(), rightScrollButton.getLeft() + rightScrollButton.getWidth(), rightScrollButton.getTop() + rightScrollButton.getHeight(),
+            rightScrollButton.getIsHighlighted());
+    };
+    rightScrollButton.click = scrollRight;
+
+    var hScrollSlider = new control("HScrollSlider");
+    hScrollSlider.setLeft(canvasWidth / 2 + scrollButtonSize+1);
+    hScrollSlider.setTop(leftScrollButton.getTop());
+    hScrollSlider.setWidth(scrollButtonSize);
+    //vScrollSlider.setHeight(scrollButtonSize);
+
+
+    var hScrollRect = new control("HScrollRect");
+    hScrollRect.setLeft(canvasWidth / 2 + scrollButtonSize);
+    hScrollRect.setTop(canvasHeight - hScrollBarHeight);
+    hScrollRect.setWidth(bottomBarArea.scrollWidth );
+    hScrollRect.setHeight(hScrollBarHeight);
+    hScrollRect.click = hScrollClick;
+    hScrollRect.draw = function () { };
+
+
 
     var vScrollSlider = new control("VScrollSlider");
     vScrollSlider.setLeft(canvasWidth - vScrollBarWidth + 3);
@@ -130,24 +177,53 @@ function ExcelUI(canvasId,eObj) {
         controls.add(scrollUpButton);
         controls.add(scrollDownButton);
         controls.add(vScrollRect);
+        controls.add(leftScrollButton);
+        controls.add(rightScrollButton);
+        controls.add(hScrollRect);
 
 
         c.addEventListener('mousemove', function (evt) {
             var mousePos = getMousePos(c, evt);
        
             if (!dragOk) {
-                controls.forEach(function (item) {
-                    if (item.isHit(mousePos.x, mousePos.y)) {
+                try{
+                    controls.forEach(function (item) {
+                        if (item.isHit(mousePos.x, mousePos.y)) {
+                            if (_lastMouseOver != null) {
 
-                        item.mouseover();
-                        item.draw();
-                    }
-                    else {
-                        item.mouseout();
-                        item.draw();
+                                if (_lastMouseOver != item) {
+                                    _lastMouseOver.mouseout();
+                                    _lastMouseOver.draw();
+                                }
+                                else {
+                                    item.mouseover();
+                                    item.draw();
+                                    _lastMouseOver = item;
+                                }
+                            }
+                            else {
+                                item.mouseover();
+                                item.draw();
+                                _lastMouseOver = item;
 
+                            }
+
+                            throw StopIteration;
+                        }
+                       
+                  
+                    });
+
+                    if (_lastMouseOver != null) {
+                        _lastMouseOver.mouseout();
+                        _lastMouseOver.draw();
+                        _lastMouseOver = null;
                     }
-                });
+                    
+                }
+                catch (error) {
+                    if (error != StopIteration) throw error;
+                }
             }
             else {
 
@@ -166,12 +242,20 @@ function ExcelUI(canvasId,eObj) {
         c.addEventListener('mouseout', function (evt) {
 
             dragOk = false;
-            controls.forEach(function (item) {
-                if (item.getIsHighlighted()) {
-                    item.mouseout();
-                    item.draw();
-                }
-            });
+            try{
+                controls.forEach(function (item) {
+                    if (item = _lastMouseOver) {
+                        item.mouseout();
+                        item.draw();
+                        _lastMouseOver = null;
+                        throw StopIteration;
+                    }
+                });
+             
+            }
+            catch (error) {
+                if (error != StopIteration) throw error;
+            }
 
          
 
@@ -190,6 +274,7 @@ function ExcelUI(canvasId,eObj) {
                 controls.forEach(function (item) {
                     if (item.isHit(mousePos.x, mousePos.y)) {
                         item.click(mousePos.x, mousePos.y);
+                        return false;
                     }
                 });
 
@@ -333,11 +418,27 @@ function ExcelUI(canvasId,eObj) {
         drawGradientLineV(ctx, startXPos, 0, startYPos);
 
 
-     
+        //H grids, draw rows, no lines. lines will be drawn later
+        //for frozen rows
+        for (counter = 1; counter <= _eObj.frozenColumns; counter++) {
+
+            colWidth = getColumnWidth(counter);
+
+
+            drawTextCenter(String.fromCharCode(64 + counter ), ctx, xPos, 0, colWidth, startYPos, font, "black");
+
+            drawGradientLineV(ctx, xPos + colWidth, 0, startYPos);
+            drawThinVerticalLine(ctx, xPos + colWidth, startYPos, startYPos + vLineLength, "#D3D3D3");
+
+            hLineLength += colWidth;
+            xPos = xPos + colWidth;
+
+
+        }
 
         for (counter = 1; counter <= _eObj.numberOfColumn - firstVisibleColumn + 1 ; counter++) {
 
-            colWidth = getColumnWidth(counter);
+            colWidth = getColumnWidth(startColumn + counter - 1);
 
             drawTextCenter(String.fromCharCode(64 + startColumn + counter - 1), ctx, xPos, 0, colWidth, startYPos, font, "black");
            
@@ -532,7 +633,7 @@ function ExcelUI(canvasId,eObj) {
     //range: {startCell, endCell}
     function hilightCombinedCell(range, hilight) {
        
-        var info = getCombinedRangeInfo(range)
+        var info = getCombinedRangeInfo(range);
         var borderColor = _colors.normalBorder;
 
         if (hilight) {
@@ -673,37 +774,16 @@ function ExcelUI(canvasId,eObj) {
             pair = item.split(":");
             startCell = getCellAddress(pair[0]);
             endCell = getCellAddress(pair[1]);
-            var w = 0;
-            var startCellPos = getCellPos(startCell);
-            var yPos ;
-            var height;
+           
 
-            //combined cell not visible, ignore it.
-            if (startCell.row > _eObj.frozenRows && (startCell.row > lastVisibleRow || endCell.row < firstVisibleRow)) return;
-            
-            //clear the inner grids
-            for (var c = startCell.column; c <= endCell.column; c++) {
-                w = w + getColumnWidth(c);
+            var info = getCombinedRangeInfo({ startCell: startCell, endCell: endCell });
+            var startVisiblePos = getCellPos(info.startVisibleCell);
+            var endVisiblePos = getCellPos(info.endVisibleCell);
 
-            }
+            if (!info.visible) return;
+            ctx.clearRect(startVisiblePos.x + 1, startVisiblePos.y + 1, endVisiblePos.x - startVisiblePos.x + getColumnWidth(info.endVisibleCell.column) - 1, endVisiblePos.y - startVisiblePos.y + getRowHeight(info.endVisibleCell.row) - 1);
 
-            if (w + startCellPos.x > dataArea.width) {
-
-                w = dataArea.width - startCellPos.x;
-            }
-
-
-            for (var r = startCell.row; r <= endCell.row; r++) {
-                
-                if (r > _eObj.frozenRows && r < firstVisibleRow) continue;
-                yPos = getCellPos({row:r,column:1}).y;
-                height = getRowHeight(r);
-                if ( r == startCell.row) yPos = yPos + 1;
-               
-                ctx.clearRect(startCellPos.x + 1, yPos ,w - 1 , height   );
-            }
-
-
+        
 
 
 
@@ -1125,6 +1205,30 @@ function ExcelUI(canvasId,eObj) {
 
     }
 
+    function hScrollDelta(delta) {
+
+
+
+        var columns = Math.floor(delta * (_eObj.numberOfColumn - _eObj.frozenColumns) / bottomBarArea.scrollWidth);
+        firstVisibleColumn = columns + firstVisibleColumn;
+        if (firstVisibleColumn < 1 + _eObj.frozenColumns) {
+            firstVisibleColumn = 1 + _eObj.frozenColumns;
+        }
+        if (firstVisibleColumn > _eObj.numberOfColumn) {
+            firstVisibleColumn = _eObj.numberOfColumn;
+        }
+
+
+
+        draw(firstVisibleRow, firstVisibleColumn);
+
+
+
+
+
+    }
+
+
     function vScrollClick(x,y) {
 
         var delta = 0;
@@ -1139,9 +1243,24 @@ function ExcelUI(canvasId,eObj) {
 
     }
 
+    function hScrollClick(x, y) {
+
+        var delta = 0;
+        if (x > hScrollSlider.getLeft() + hScrollSlider.getWidth()) {
+            delta = x - hScrollSlider.getLeft() - hScrollSlider.getWidth();
+        }
+
+        if (x < hScrollSlider.getLeft()) {
+            delta = x - hScrollSlider.getLeft();
+        }
+        hScrollDelta(delta);
+
+    }
+
+
     function drawButton(flag, left,top,right,bottom, hilighted) {
 
-        ctx.clearRect(left, top, right, bottom);
+        ctx.clearRect(left, top, right-left, bottom-top);
         var color = "#808080";
 
         if (hilighted) color = "black";
@@ -1234,26 +1353,21 @@ function ExcelUI(canvasId,eObj) {
     function drawBottomBar() {
         //clear bottom 
         ctx.clearRect(bottomBarArea.left, bottomBarArea.top, bottomBarArea.left + bottomBarArea.width, bottomBarArea.top + bottomBarArea.height);
-
-       
       
-        
         drawHScrollBar();
     }
 
     function drawHScrollBar() {
-        var left = canvasWidth / 2;
-        var right = canvasWidth / 2 + scrollButtonSize;
-        var top = canvasHeight - scrollButtonSize - 1;
-        var bottom = canvasHeight - 1;
+        
+        leftScrollButton.draw();
+        rightScrollButton.draw();
 
-        drawButton("L", left, top, right, bottom);
+        hScrollSlider.setWidth(Math.floor((lastVisibleColumn - firstVisibleColumn + 1) / (_eObj.numberOfColumn - _eObj.frozenColumns) * bottomBarArea.scrollWidth))
+        hScrollSlider.setLeft(Math.floor(hScrollRect.getLeft() + 1 + (firstVisibleColumn - 1 - _eObj.frozenColumns) / (_eObj.numberOfColumn - _eObj.frozenColumns) * bottomBarArea.scrollWidth));
 
-        left = dataArea.left + dataArea.width - scrollButtonSize;
-        right = left + scrollButtonSize;
 
-        drawButton("R", left, top, right, bottom);
-
+        drawRectangle(ctx, hScrollSlider.getLeft(), hScrollSlider.getTop(), hScrollSlider.getWidth(), scrollButtonSize);
+        
 
     }
 
