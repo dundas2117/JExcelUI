@@ -10,15 +10,18 @@
 
 
 </head>
-<body>
-    <canvas width="600" height="400" id="myCanvas">
+<body style="margin-top: 0px; margin-bottom: 0px; margin-left: 0px; margin-right: 0px">
+   <div id="container" margin="0">
+    <canvas width="600" height="400" id="myCanvas" style='z-index:-1' margin="0">
 
     </canvas>
-
+   </div>
+   
     <script>
 
         var eObj = new EObject();
         eObj.frozenRows = 4;
+	eObj.frozenColumns=2;
         eObj.data.set("A2", "A2");
         eObj.data.set("F5", "F5");
         eObj.data.set("D10", "D10");

@@ -282,6 +282,19 @@ function ExcelUI(canvasId,eObj) {
 
         }, true);
 
+        c.addEventListener('dblclick', function (evt) {
+            var mousePos = getMousePos(c, evt);
+
+
+            if (isPointInRect(mousePos, dataArea.left, dataArea.top, dataArea.width, dataArea.height)) {
+
+                onDataAreaDoubleClick(mousePos.x, mousePos.y);
+
+            }
+            
+
+        }, true);
+
         c.addEventListener('mousedown', function (evt) {
             var mousePos = getMousePos(c, evt);
             if (vScrollSlider.isHit(mousePos.x, mousePos.y)) {
@@ -322,8 +335,99 @@ function ExcelUI(canvasId,eObj) {
         }, false);
 
         firstVisibleRow = 1 + _eObj.frozenRows;
+        firstVisibleColumn = 1 +_eObj.frozenColumns;
         draw(firstVisibleRow, firstVisibleColumn);
     }
+
+    function onDataAreaDoubleClick(x, y) {
+
+        var cell = getCellAtPoint(x, y);
+        if (cell != null) {
+
+            doubleClickCell(cell);
+
+        }
+
+    }
+
+    //cell: {row, column}
+    function doubleClickCell(cell) {
+        var top ;
+        var left;
+        var width;
+        var height;
+
+        var pos = getCellPos(cell);
+        top =  pos.y.toString() + 'px' ;
+        left = pos.x.toString() + 'px';
+
+        /*
+        var prevCtrl = $("#cellinput");
+        if (prevCtrl != null) {
+            prevCtrl.remove();
+        }
+        */
+
+        width = (getColumnWidth(cell.column) - 1).toString();
+        height = (getRowHeight(cell.row)-1).toString();
+
+        var thisCellStyle = getCellStyle(cell);
+
+        var data = getCellData(cell);
+
+        var $ctrl = getInputForCell(thisCellStyle,data,cell);
+
+        $ctrl.css({ position: 'absolute', top: top, left: left, width: width.toString() + 'px', height: height.toString() + 'px', margin: 0, padding: 0 }).css("z-index", 100);
+     
+
+      
+        $("#container").append($ctrl);
+        $ctrl.focus();
+    }
+
+    //cellStyle: cellStyle
+    function getInputForCell(cellStyle, data, cell) {
+        var ctrl;
+        switch (cellStyle.input) {
+
+            case inputEnum.singleLine:
+                ctrl = $("<input id='cellinput'/>");
+                if (cellStyle.hAlign == hAlignEnum.right) {
+                    ctrl.css("text-align", "right");
+
+                }
+                else if (cellStyle.hAlign == hAlignEnum.left) {
+                    ctrl.css("text-align", "left");
+                }
+                if (data != null) {
+                    ctrl.val(data);
+                }
+
+                ctrl.blur(function () {
+                    setCellData(cell, $(this).val())
+                    $(this).remove();
+                    drawCellData($(this).val(), cell);
+                });
+
+                break;
+            case inputEnum.multipleLine:
+
+                ctrl = $("<textarea id='cellinput'></textarea");
+                if (data != null) {
+                    ctrl.text(data);
+                }
+                ctrl.blur(function () {
+                    setCellData(cell, $(this).text());
+                    $(this).remove();
+                    drawCellData($(this).text(), cell);
+                });
+                break;
+        }
+  
+        return ctrl;
+    }
+
+
 
     function onDataAreaClick(x, y) {
 
@@ -518,6 +622,11 @@ function ExcelUI(canvasId,eObj) {
 
         }
 
+        if (_eObj.frozenColumns != 0) {
+
+            drawThinVerticalLine(ctx, getCellPos({row:1,column:_eObj.frozenColumns}).x + getColumnWidth(_eObj.frozenColumns), startYPos, dataArea.height, "#808080");
+
+        }
     }
 
     function drawHilightedCells() {
@@ -746,21 +855,42 @@ function ExcelUI(canvasId,eObj) {
     function drawData() {
         var counter = 1;
         var pos;
+        var style;
+
         _eObj.data.forEach(function (item, key, mapObj) {
-            var addr = getCellAddress(key);
-            if (isCellVisible(addr)) {
+            var cell = getCellAddress(key);
+            if (isCellVisible(cell)) {
 
-                pos = getCellPos(addr);
-                    
-                drawTextCenter(item, ctx, pos.x, pos.y, getColumnWidth(addr.column), getRowHeight(addr.row), font, "black");
-
+               
+                drawCellData(item, cell)
+               
             }
         });
 
 
     }
 
+    function drawCellData(text,  cell) {
 
+        var pos = getCellPos(cell);
+        var style = getCellStyle(cell);
+        var width = getColumnWidth(cell.column);
+        var height = getRowHeight(cell.row);
+
+        ctx.clearRect(pos.x + 1, pos.y + 1, width - 1, height - 1);
+
+        if (style.hAlign == hAlignEnum.centre) {
+            drawTextCenter(text, ctx, pos.x, pos.y, width, height, style.font, style.color);
+        }
+        else if (style.hAlign == hAlignEnum.right) {
+
+            drawTextRight(text, ctx, pos.x, pos.y, width, height, style.font, style.color);
+
+        }
+        else {
+            drawTextLeft(text, ctx, pos.x, pos.y, width, height, style.font, style.color);
+        }
+    }
     
     //draw combined cells, simple clear the inner grids for now
     function drawCombinedCell() {
@@ -888,7 +1018,11 @@ function ExcelUI(canvasId,eObj) {
         
         var cell;
         
-        cell = getCellAtPointInARange(x,y,{ row: 1, column: firstVisibleColumn }, { row: _eObj.frozenRows, column: lastVisibleColumn });
+        cell = getCellAtPointInARange(x, y, { row: 1, column: 1 }, { row: _eObj.frozenRows, column: lastVisibleColumn });
+
+        if (cell == null) {
+            cell = getCellAtPointInARange(x, y, { row: 1, column: 1 }, { row: lastVisibleRow, column: _eObj.frozenColumns });
+        }
         if (cell == null) {
 
             cell = getCellAtPointInARange(x,y,{ row: firstVisibleRow, column: firstVisibleColumn }, { row: lastVisibleRow, column: lastVisibleColumn });
@@ -939,6 +1073,52 @@ function ExcelUI(canvasId,eObj) {
         return (pos.x >= left && pos.x <= left + width && pos.y >= top && pos.y <= top + height);
     }
 
+    //cell: {row, column}
+    //return data for that cell
+    function getCellData(cell) {
+       
+        var addrName = getCellAddressName(cell);
+        var data;
+
+        if (_eObj.data.has(addrName)) {
+
+            data = _eObj.data.get(addrName);
+        }
+
+        return data;
+
+    }
+
+    //cell: {row, column}
+    //return cellStyle for that cell
+    function getCellStyle(cell) {
+        var addrName = getCellAddressName(cell);
+        
+        return getCellStyleByAddrName(addrName);
+    }
+
+    //addrName: A128
+    //return cellStyle
+    function getCellStyleByAddrName(addrName) {
+   
+        var style = new cellStyle();
+
+        if (_eObj.cellStyles.has(addrName)) {
+            style = _eObj.cellStyles.get(addrName);
+        }
+
+        return style;
+    }
+
+    function setCellData(cell, data) {
+
+        var addrName = getCellAddressName(cell);
+        var data;
+
+        _eObj.data.set(addrName, data);
+      
+
+    }
     //addr:  (row, column)
     //return pos {x:xpos, y:ypos}
     function getCellPos(addr) {
@@ -986,7 +1166,7 @@ function ExcelUI(canvasId,eObj) {
 
     function getFrozenWidth() {
         var width = 0;
-        for (var i = 1; i < _eObj.frozenColumns; i++) {
+        for (var i = 1; i <= _eObj.frozenColumns; i++) {
             width = width + getColumnWidth(i);
 
         }
@@ -1096,6 +1276,15 @@ function ExcelUI(canvasId,eObj) {
 
     }
 
+    //cell : {row, column}
+    //return address such as A128
+    function getCellAddressName(cell) {
+        var colName = fromNumberToLetter(cell.column);
+        var addrName = colName + cell.row.toString();
+
+        return addrName;
+    }
+
     
 
     function drawThinHorizontalLine(c, x1, x2, y, style) {
@@ -1156,6 +1345,28 @@ function ExcelUI(canvasId,eObj) {
 
     }
 
+    function drawTextRight(text, c, x1, y1, width, height, font, color) {
+        var x = x1 + width;
+        var y = y1 + height / 2;
+        c.font = font;
+        c.textAlign = "right";
+        c.textBaseline = "middle";
+        c.fillStyle = color;
+        c.fillText(text, x, y);
+
+    }
+
+    function drawTextLeft(text, c, x1, y1, width, height, font, color) {
+        var x = x1 ;
+        var y = y1 + height / 2;
+        c.font = font;
+        c.textAlign = "left";
+        c.textBaseline = "middle";
+        c.fillStyle = color;
+        c.fillText(text, x, y);
+
+    }
+
     function scrollDown(){
     
         if (lastVisibleRow == firstVisibleRow) return;
@@ -1177,7 +1388,7 @@ function ExcelUI(canvasId,eObj) {
     }
 
     function scrollLeft() {
-        if (firstVisibleColumn == 1) return;
+        if (firstVisibleColumn == 1 + _eObj.frozenColumns) return;
         firstVisibleColumn--;
         draw(firstVisibleRow, firstVisibleColumn);
     }
@@ -1448,6 +1659,7 @@ function EObject() {
 
     var columnStyles = new Map();
     var rowStyles = new Map();
+    var cellStyles = new Map();
 
     var data = new Map();
     var combinedCells = new Set();
@@ -1462,6 +1674,7 @@ function EObject() {
 
             columnStyles: columnStyles,
             rowStyles: rowStyles,
+            cellStyles:cellStyles,
 
             combinedCells:combinedCells, //not supported yet
 
@@ -1488,6 +1701,30 @@ function combinedRnageInfo() {
 
     }
 }
+
+function cellStyle() {
+
+    return {
+
+        font: '11pt Calibri',
+        hAlign: hAlignEnum.left,
+        input: inputEnum.singleLine,
+        colr:"black"
+    }
+
+}
+
+var hAlignEnum = {
+    left: 1,
+    centre: 2,
+    right: 3
+
+};
+
+var inputEnum = {
+    singleLine: 1,
+    multipleLine:2
+};
 
 //rowStyle = {rowHeight:100,font:''}
 //columnStyles={columnWidth:100,font:''}
