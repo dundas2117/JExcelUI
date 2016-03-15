@@ -12,29 +12,49 @@
 </head>
 <body style="margin-top: 0px; margin-bottom: 0px; margin-left: 0px; margin-right: 0px">
    <div id="container" margin="0">
-    <canvas width="600" height="400" id="myCanvas" style='z-index:-1' margin="0">
+    <canvas width="1200" height="600" id="myCanvas" style='z-index:-1' margin="0">
 
     </canvas>
    </div>
    
     <script>
 
-        var eObj = new EObject();
+
+        var eObj = new ExcelUINS.EObject();
+        eObj.numberOfRows = 400;
+        eObj.numberOfColumn = 100;
         eObj.frozenRows = 4;
-	eObj.frozenColumns=2;
+        eObj.frozenColumns = 2;
+        /*
         eObj.data.set("A2", "A2");
         eObj.data.set("F5", "F5");
         eObj.data.set("D10", "D10");
         eObj.data.set("D11", "D11");
+        */
+        var d = "";
+        for (var i = 1; i <= 20; i++) {
+            for (var j = 1 ; j <= 200; j++) {
+
+                d = d + '"' + String.fromCharCode(64 + i) + j.toString() + '":"' + String.fromCharCode(64 + i) + j.toString() + '",';
+            }
+        }
+
+        d = d.substr(0, d.length - 1);
+
+        eObj.data = ExcelUINS.objToStrMap(JSON.parse('{ ' + d + '}'));
 
         eObj.combinedCells.add("E9:G10");
         //eObj.data.set("H20", "H20");
 
         eObj.rowStyles.set(11, { rowHeight: 45 });
         eObj.columnStyles.set(4, { columnWidth: 100 });
+        
+        var cellStyle = new ExcelUINS.cellStyle();
+        cellStyle.input = ExcelUINS.inputEnum.dropdownList;
 
+        eObj.cellStyles.set("F5", cellStyle);
 
-        var oExcel = new ExcelUI("myCanvas",eObj);
+        var oExcel = new ExcelUINS.ExcelUI("myCanvas", eObj);
         oExcel.hilightCell({ row: 6, column: 6 });
   
 
