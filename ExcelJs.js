@@ -31,7 +31,8 @@
             normalBorder: "#D3D3D3",
             normalFill:"white",
             areaBorder: "#808080",
-            scrollArea: "WhiteSmoke"
+            scrollArea: "WhiteSmoke",
+            selected: "LightSkyBlue "
 
         };
     
@@ -177,13 +178,6 @@
         function init()
         {
         
-            controls.add(scrollUpButton);
-            controls.add(scrollDownButton);
-            controls.add(vScrollRect);
-            controls.add(leftScrollButton);
-            controls.add(rightScrollButton);
-            controls.add(hScrollRect);
-
 
             c.addEventListener('mousemove', function (evt) {
                 var mousePos = getMousePos(c, evt);
@@ -268,18 +262,30 @@
                 var mousePos = getMousePos(c, evt);
             
 
-                if (isPointInRect(mousePos, dataArea.left,dataArea.top, dataArea.width, dataArea.height)) {
+                if (isPointInRect(mousePos, startXPos,startYPos, dataArea.width - startXPos, dataArea.height-startYPos)) {
 
                     onDataAreaClick(mousePos.x, mousePos.y);
 
                 }
                 else {
-                    controls.forEach(function (item) {
-                        if (item.isHit(mousePos.x, mousePos.y)) {
-                            item.click(mousePos.x, mousePos.y);
-                            return false;
-                        }
-                    });
+                    try{
+                        controls.forEach(function (item) {
+                            if (item.isHit(mousePos.x, mousePos.y)) {
+
+                                if (item.clickObj !=undefined) {
+                                    item.clickObj(item);
+                                }
+                                else {
+                                    item.click(mousePos.x, mousePos.y);
+                                }
+                                throw StopIteration;
+                            }
+                        });
+                    }
+                    catch (error) {
+                        if (error != StopIteration) throw error;
+                    }
+
 
                 }
 
@@ -346,9 +352,23 @@
             }, false);
 
             firstVisibleRow = 1 + _eObj.frozenRows;
-            firstVisibleColumn = 1 +_eObj.frozenColumns;
+            firstVisibleColumn = 1 + _eObj.frozenColumns;
+
+           
             draw(firstVisibleRow, firstVisibleColumn);
             //draw(firstVisibleRow, 27);
+        }
+
+        function initControls() {
+
+            controls.clear();
+            controls.add(scrollUpButton);
+            controls.add(scrollDownButton);
+            controls.add(vScrollRect);
+            controls.add(leftScrollButton);
+            controls.add(rightScrollButton);
+            controls.add(hScrollRect);
+
         }
 
         function onDataAreaDoubleClick(x, y) {
@@ -491,7 +511,7 @@
             var colWidth;
 
             ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-
+            initControls();
         
             //H grids, draw rows, no lines. lines will be drawn later
             //for frozen rows
@@ -506,8 +526,12 @@
                 //draw line seperating row number
                 drawGradientLineH(ctx, 0, startXPos, yPos + rowHeight);
 
+                controls.add(getRowIndControl(0, yPos, startXPos, rowHeight, counter));
+
                 vLineLength += rowHeight;
                 yPos = yPos + rowHeight;
+
+               
 
            
             }
@@ -524,6 +548,8 @@
 
                 //draw line seperating row number
                 drawGradientLineH(ctx, 0, startXPos, yPos + rowHeight);
+
+                controls.add(getRowIndControl(0, yPos, startXPos, rowHeight, startRow + counter - 1));
 
                 vLineLength += rowHeight;
                 yPos = yPos + rowHeight;
@@ -608,26 +634,97 @@
             }
 
             drawCombinedCell();
+            drawCellsStyle();
             drawData();
             drawHilightedCells();
 
-            ctx.clearRect(dataArea.width, startYPos, dataArea.width + vScrollBarWidth, dataArea.height);
-            ctx.clearRect(dataArea.left, dataArea.bottom, dataArea.width , hScrollBarHeight);
-        
-            drawBorders();
-        
-      
-  
-            drawVScrollBar();
-            drawBottomBar();
+            drawBorderAndBars();
 
 
       
         
         }
 
+        function drawBorderAndBars() {
+            ctx.clearRect(dataArea.left + dataArea.width, 0, dataArea.width + vScrollBarWidth + 2, dataArea.height);
+            ctx.clearRect(dataArea.left, dataArea.bottom, dataArea.width, hScrollBarHeight);
+
+            drawBorders();
+
+            drawVScrollBar();
+            drawBottomBar();
+
+        }
+        //add Row indicator control , so that it can capture mousemove and click event
+        function getRowIndControl(left, top , width, height, row) {
+            var c = new control("RowInd");
+            c.setLeft(left);
+            c.setTop(top);
+            c.setWidth(width);
+            c.setHeight(height);
+            c.click = function () { selectRow(row); };
+            c.draw = function () { };
+
+            return c;
+        }
+
+        function selectRow(row) {
+
+            var pos;
+            pos = getCellPos({ row: row, column: firstVisibleColumn });
+            var rowHeight = getRowHeight(row);
+            var flag = true;
+
+            if (_eObj.selectedRows.has(row)) {
+                flag = false;
+
+                _eObj.selectedRows.delete(row);
+            }
+            else {
+                _eObj.selectedRows.add(row);
+            }
+
+
+            for (var i = 1; i <= _eObj.numberOfColumn; i++) {
+                selectCell({ row: row, column: i },flag);
+
+            }
+                 
+
+
+            drawBorderAndBars();
+
+        }
+
+
+
+
+        function selectCell(cell,flag) {
+            var data;
+            var cell;
+            var style;
+
+            style = getCellStyle(cell);
+            if (flag) {
+                style.background = _colors.selected;
+            }
+            else {
+                style.background = "white";
+            }
+            _eObj.cellStyles.set(getCellAddressName(cell), style);
+
+            data = getCellData(cell);
+            if (data == null) {
+                data = "";
+            }
+
+
+            drawCellData(data, cell);
+        }
+
         //left/top/right/bottom border, and the frozen lines 
         function drawBorders() {
+           
             //top border
             drawThinHorizontalLine(ctx, startXPos, dataArea.width, startYPos, "#808080");
             //bottom border
@@ -650,6 +747,11 @@
                 drawThinVerticalLine(ctx, getCellPos({row:1,column:_eObj.frozenColumns}).x + getColumnWidth(_eObj.frozenColumns), startYPos, dataArea.height, "#808080");
 
             }
+
+
+  
+
+
         }
 
         function drawHilightedCells() {
@@ -908,6 +1010,33 @@
 
         }
 
+        function drawCellsStyle() {
+           
+            _eObj.cellStyles.forEach(function (item, key, mapObj) {
+                var cell = getCellAddress(key);
+                if (isCellVisible(cell)) {
+
+
+                    drawCellStyle(cell, item)
+
+                }
+            });
+
+        }
+
+        function drawCellStyle(cell, style) {
+
+            var pos = getCellPos(cell);
+           
+            var width = getColumnWidth(cell.column);
+            var height = getRowHeight(cell.row);
+
+            ctx.clearRect(pos.x + 1, pos.y + 1, width - 1, height - 1);
+
+            ctx.fillStyle = style.background;
+            ctx.fillRect(pos.x + 1, pos.y + 1, width - 1, height - 1)
+        }
+
         function drawData() {
             var counter = 1;
             var pos;
@@ -933,7 +1062,8 @@
             var width = getColumnWidth(cell.column);
             var height = getRowHeight(cell.row);
 
-            ctx.clearRect(pos.x + 1, pos.y + 1, width - 1, height - 1);
+            drawCellStyle(cell, style);
+
 
             var s = fittingString(ctx, text, width);
 
@@ -1751,6 +1881,8 @@
         var data = new Map();
         var combinedCells = new Set();
 
+        var selectedRows = new Set();
+
 
         return {
             numberOfRows: 100,
@@ -1765,7 +1897,8 @@
 
             combinedCells:combinedCells, //not supported yet
 
-            data:data
+            data: data,
+            selectedRows: selectedRows
 
         }
     }
@@ -1796,7 +1929,8 @@
             font: '11pt Calibri',
             hAlign: hAlignEnum.left,
             input: inputEnum.singleLine,
-            color:"black"
+            color: "black",
+            background:"white"
         }
 
     }

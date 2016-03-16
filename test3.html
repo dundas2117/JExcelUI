@@ -9,21 +9,29 @@
 
     <script>
 
-        function car() {
-
-            var doors = 4;
+        function cellStyle() {
 
             return {
-                doors: doors,
-                setDoors:function(v){doors = v;},
-                showDetail: function () { console.log(doors);}
+
+                font: '11pt Calibri',
+                color: "black",
+                background: "white"
             }
+
         }
 
 
-        var myCar = new car();
-        myCar.setDoors(5);
-        myCar.showDetail();
+        var s = new Map();
+        s.set(1, new cellStyle());
+
+        var c = s.get(1);
+
+        c.background = "red";
+        alert(s.get(1).background);
+
+
+
+
 
     </script>
 
